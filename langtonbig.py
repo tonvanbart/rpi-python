@@ -52,8 +52,8 @@ while True:
             testy = y-4+iy
             if ix == 4 and iy == 5:
                 # here is the ant
-                sense.set_pixel(ix,iy,60,0,0)
-            if (testx,testy) in alive:
+                sense.set_pixel(ix,iy,100,0,0)
+            elif (testx,testy) in alive:
                 sense.set_pixel(ix,iy,0,60,0)
 
     time.sleep(0.08)
