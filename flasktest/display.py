@@ -2,6 +2,7 @@ from flask import Flask, render_template, redirect, url_for, request
 from sense_hat import SenseHat
 import signal
 import sys
+import threading
 
 app = Flask(__name__)
 sense = SenseHat()
@@ -13,7 +14,8 @@ def hello_world():
     # show something on the hat when the server is hit
     global count
     count = count + 1
-    sense.show_message('hit ' + str(count))
+    countmsg = f'hit {count}'
+    threading.Thread(target=lambda: sense.show_message(countmsg)).start()
     return render_template('display.html', count=count)
 
 @app.route('/message', methods=['POST'])
