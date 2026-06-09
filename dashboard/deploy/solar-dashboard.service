@@ -1,0 +1,17 @@
+[Unit]
+Description=Solar Dashboard Flask app
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=iot
+WorkingDirectory=/home/iot/projects/rpi-python/dashboard
+ExecStart=/home/iot/projects/rpi-python/dashboard/venv/bin/python /home/iot/projects/rpi-python/dashboard/app.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/home/iot/projects/rpi-python/dashboard/app.log
+StandardError=append:/home/iot/projects/rpi-python/dashboard/app.log
+
+[Install]
+WantedBy=multi-user.target

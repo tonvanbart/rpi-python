@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Solar Dashboard</title>
+<style>
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background: #f8f9fa;
+    color: #1f2937;
+}
+h1 { margin: 0 0 20px 0; font-size: 1.4rem; }
+.tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.tile {
+    background: white;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.tile-label { font-size: 0.85rem; color: #6b7280; margin-bottom: 4px; }
+.tile-value { font-size: 2rem; font-weight: 600; }
+.tile-unit { font-size: 1rem; font-weight: 400; color: #6b7280; margin-left: 4px; }
+.tile-sub { font-size: 0.8rem; color: #6b7280; margin-top: 4px; }
+.tile.pv .tile-value { color: #16a34a; }
+.tile.consumption .tile-value { color: #ea580c; }
+.tile.export .tile-value { color: #16a34a; }
+.tile.import .tile-value { color: #dc2626; }
+.ranges {
+    margin-bottom: 16px;
+}
+.ranges button {
+    background: white;
+    border: 1px solid #d1d5db;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-right: 4px;
+    font-size: 0.9rem;
+}
+.ranges button.active {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+}
+.chart-container {
+    background: white;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    height: 400px;
+}
+.last-update {
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin-top: 16px;
+    text-align: right;
+}
+</style>
+</head>
+<body>
+<h1>Solar Dashboard</h1>
+
+<div class="tiles">
+    <div class="tile pv">
+        <div class="tile-label">Producing</div>
+        <div><span class="tile-value" id="pv-value">—</span><span class="tile-unit">W</span></div>
+    </div>
+    <div class="tile consumption">
+        <div class="tile-label">Using</div>
+        <div><span class="tile-value" id="consumption-value">—</span><span class="tile-unit">W</span></div>
+    </div>
+    <div class="tile" id="grid-tile">
+        <div class="tile-label" id="grid-label">Grid</div>
+        <div><span class="tile-value" id="grid-value">—</span><span class="tile-unit">W</span></div>
+        <div class="tile-sub" id="grid-sub"></div>
+    </div>
+</div>
+
+<div class="ranges">
+    <button data-range="1h" class="active">1h</button>
+    <button data-range="6h">6h</button>
+    <button data-range="24h">24h</button>
+    <button data-range="7d">7d</button>
+    <button data-range="30d">30d</button>
+</div>
+
+<div class="chart-container">
+    <canvas id="chart"></canvas>
+</div>
+
+<div class="last-update" id="last-update"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script>
+let currentRange = '1h';
+let chart;
+
+async function refreshLatest() {
+    try {
+        const r = await fetch('/api/latest');
+        if (!r.ok) return;
+        const d = await r.json();
+
+        document.getElementById('pv-value').textContent = d.pv_w ?? '—';
+        document.getElementById('consumption-value').textContent = d.consumption_w ?? '—';
+
+        const tile = document.getElementById('grid-tile');
+        const label = document.getElementById('grid-label');
+        const value = document.getElementById('grid-value');
+        const sub = document.getElementById('grid-sub');
+
+        tile.classList.remove('import', 'export');
+        if (d.grid_w === null || d.grid_w === undefined) {
+            label.textContent = 'Grid';
+            value.textContent = '—';
+            sub.textContent = '';
+        } else if (d.grid_w < 0) {
+            tile.classList.add('export');
+            label.textContent = 'Exporting';
+            value.textContent = Math.abs(d.grid_w);
+            sub.textContent = 'to grid';
+        } else if (d.grid_w > 0) {
+            tile.classList.add('import');
+            label.textContent = 'Importing';
+            value.textContent = d.grid_w;
+            sub.textContent = 'from grid';
+        } else {
+            label.textContent = 'Balanced';
+            value.textContent = 0;
+            sub.textContent = '';
+        }
+
+        const t = new Date(d.ts * 1000);
+        document.getElementById('last-update').textContent =
+            'Last reading: ' + t.toLocaleString();
+    } catch (e) {
+        console.error('refreshLatest failed', e);
+    }
+}
+
+async function refreshChart() {
+    try {
+        const r = await fetch('/api/series?range=' + currentRange);
+        if (!r.ok) return;
+        const data = await r.json();
+
+        const pv = data.map(d => ({x: new Date(d.ts * 1000), y: d.pv_w}));
+        const cons = data.map(d => ({x: new Date(d.ts * 1000), y: d.consumption_w}));
+        const grid = data.map(d => ({x: new Date(d.ts * 1000), y: d.grid_w}));
+
+        if (!chart) {
+            const ctx = document.getElementById('chart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                        {
+                            label: 'PV Production',
+                            data: pv,
+                            borderColor: '#16a34a',
+                            backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                            tension: 0.2,
+                            spanGaps: true,
+                            pointRadius: 0,
+                        },
+                        {
+                            label: 'House Consumption',
+                            data: cons,
+                            borderColor: '#ea580c',
+                            backgroundColor: 'rgba(234, 88, 12, 0.1)',
+                            tension: 0.2,
+                            spanGaps: true,
+                            pointRadius: 0,
+                        },
+                        {
+                            label: 'Grid Flow (− = export)',
+                            data: grid,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.2,
+                            spanGaps: true,
+                            pointRadius: 0,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: { tooltipFormat: 'PP HH:mm' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Watts' },
+                            grid: {
+                                color: (ctx) => ctx.tick.value === 0
+                                    ? 'rgba(0, 0, 0, 0.6)'
+                                    : 'rgba(0, 0, 0, 0.08)',
+                                lineWidth: (ctx) => ctx.tick.value === 0 ? 2 : 1,
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top' },
+                    }
+                }
+            });
+        } else {
+            chart.data.datasets[0].data = pv;
+            chart.data.datasets[1].data = cons;
+            chart.data.datasets[2].data = grid;
+            chart.update('none');
+        }
+    } catch (e) {
+        console.error('refreshChart failed', e);
+    }
+}
+
+document.querySelectorAll('.ranges button').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.ranges button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentRange = btn.dataset.range;
+        refreshChart();
+    });
+});
+
+async function refreshAll() {
+    await refreshLatest();
+    await refreshChart();
+}
+
+refreshAll();
+setInterval(refreshAll, 60000);
+</script>
+</body>
+</html>
