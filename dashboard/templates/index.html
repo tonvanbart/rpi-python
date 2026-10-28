@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Solar Dashboard</title>
 <style>
 body {
@@ -61,6 +62,38 @@ h1 { margin: 0 0 20px 0; font-size: 1.4rem; }
     color: #6b7280;
     margin-top: 16px;
     text-align: right;
+}
+
+/* Phones */
+@media (max-width: 600px) {
+    body { padding: 12px; }
+    h1 { font-size: 1.2rem; margin-bottom: 12px; }
+
+    /* Producing + Using side by side, Grid full width below */
+    .tiles {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+    #grid-tile { grid-column: 1 / -1; }
+
+    .tile { padding: 12px; }
+    .tile-value { font-size: 1.7rem; }
+
+    /* Range buttons: one row of equal-width, finger-sized buttons */
+    .ranges { display: flex; gap: 6px; }
+    .ranges button {
+        flex: 1;
+        margin-right: 0;
+        padding: 10px 0;
+    }
+
+    /* Shorter chart, less padding */
+    .chart-container {
+        height: 300px;
+        padding: 8px;
+    }
+
+    .last-update { text-align: center; }
 }
 </style>
 </head>
@@ -194,10 +227,14 @@ async function refreshChart() {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },   // easier to touch-inspect
+
                     scales: {
                         x: {
                             type: 'time',
-                            time: { tooltipFormat: 'PP HH:mm' }
+                            time: { tooltipFormat: 'PP HH:mm' },
+                            ticks: { maxTicksLimit: 6, maxRotation: 0 }  // avoid crowded/rotated labels
+
                         },
                         y: {
                             title: { display: true, text: 'Watts' },
@@ -211,6 +248,8 @@ async function refreshChart() {
                     },
                     plugins: {
                         legend: { position: 'top' },
+                        labels: { boxWidth: 12, font: { size: window.innerWidth < 600 ? 10 : 12 } }
+
                     }
                 }
             });
