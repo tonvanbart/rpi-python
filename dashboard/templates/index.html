@@ -33,6 +33,27 @@ h1 { margin: 0 0 20px 0; font-size: 1.4rem; }
 .tile.consumption .tile-value { color: #ea580c; }
 .tile.export .tile-value { color: #16a34a; }
 .tile.import .tile-value { color: #dc2626; }
+#fireplace-tile {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+#fireplace-tile .tile-value { font-size: 1.4rem; color: #6b7280; }
+#fireplace-tile.on .tile-value { color: #ea580c; }
+#fireplace-button {
+    background: white;
+    border: 1px solid #d1d5db;
+    padding: 10px 18px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+#fireplace-tile.on #fireplace-button {
+    background: #ea580c;
+    color: white;
+    border-color: #ea580c;
+}
+#fireplace-button:disabled { opacity: 0.5; cursor: default; }
 .ranges {
     margin-bottom: 16px;
 }
@@ -74,7 +95,7 @@ h1 { margin: 0 0 20px 0; font-size: 1.4rem; }
         grid-template-columns: 1fr 1fr;
         gap: 10px;
     }
-    #grid-tile { grid-column: 1 / -1; }
+    #grid-tile, #fireplace-tile { grid-column: 1 / -1; }
 
     .tile { padding: 12px; }
     .tile-value { font-size: 1.7rem; }
@@ -113,6 +134,13 @@ h1 { margin: 0 0 20px 0; font-size: 1.4rem; }
         <div class="tile-label" id="grid-label">Grid</div>
         <div><span class="tile-value" id="grid-value">—</span><span class="tile-unit">W</span></div>
         <div class="tile-sub" id="grid-sub"></div>
+    </div>
+    <div class="tile" id="fireplace-tile">
+        <div>
+            <div class="tile-label">Fireplace</div>
+            <div class="tile-value" id="fireplace-value">—</div>
+        </div>
+        <button id="fireplace-button" disabled>…</button>
     </div>
 </div>
 
@@ -273,9 +301,46 @@ document.querySelectorAll('.ranges button').forEach(btn => {
     });
 });
 
+function showFireplace(running) {
+    document.getElementById('fireplace-tile').classList.toggle('on', running);
+    document.getElementById('fireplace-value').textContent = running ? 'On' : 'Off';
+    const btn = document.getElementById('fireplace-button');
+    btn.textContent = running ? 'Turn off' : 'Turn on';
+    btn.dataset.running = running;
+    btn.disabled = false;
+}
+
+async function refreshFireplace() {
+    try {
+        const r = await fetch('/api/fireplace');
+        if (!r.ok) return;
+        showFireplace((await r.json()).running);
+    } catch (e) {
+        console.error('refreshFireplace failed', e);
+    }
+}
+
+document.getElementById('fireplace-button').addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    btn.disabled = true;
+    try {
+        const r = await fetch('/api/fireplace', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({on: btn.dataset.running !== 'true'}),
+        });
+        if (r.ok) showFireplace((await r.json()).running);
+    } catch (e) {
+        console.error('fireplace switch failed', e);
+    } finally {
+        btn.disabled = false;
+    }
+});
+
 async function refreshAll() {
     await refreshLatest();
     await refreshChart();
+    await refreshFireplace();
 }
 
 refreshAll();

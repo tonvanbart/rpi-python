@@ -9,6 +9,8 @@ LAN-only by design. No cloud, no external dependencies beyond Chart.js loaded fr
 - **Live tiles**: current PV production, current house consumption, current grid flow (with sign and direction). Auto-refresh every 60 s.
 - **Time series chart**: PV production, house consumption, grid flow over a selectable range (1h / 6h / 24h / 7d / 30d). Server-side bucketing keeps every range view ~150–300 points so the chart stays snappy even at 30 days.
 
+- **Fireplace switch**: turns the Sense HAT fireplace animation ([rpi-fireplace](https://github.com/tonvanbart/rpi-fireplace)) on and off. `app.py` starts `fireplace.py` as a child process (with the system `/usr/bin/python3`, which has `sense_hat`) and stops it with SIGTERM, which makes it clear the LEDs. A fireplace started by hand is detected and can be stopped too. Output goes to `fireplace.log`. Paths are set at the top of `app.py`. Because the fireplace is a child of the dashboard service, restarting or stopping `solar-dashboard` also stops the fireplace.
+
 ## Architecture
 
 ```

@@ -1,10 +1,24 @@
+import os
+import signal
 import sqlite3
+import subprocess
+import threading
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
 DB_PATH = Path(__file__).parent / "solarpanel.db"
+
+# fireplace.py needs sense_hat, which is installed system-wide, not in our venv
+FIREPLACE_PYTHON = "/usr/bin/python3"
+FIREPLACE_SCRIPT = Path("/home/iot/projects/tonvanbart/rpi-fireplace/fireplace.py")
+FIREPLACE_LOG = Path(__file__).parent / "fireplace.log"
+# matches our own launch as well as a manual `python3 fireplace.py`
+FIREPLACE_PATTERN = r"python3? .*fireplace\.py$"
+
+fireplace_lock = threading.Lock()
+fireplace_proc = None
 
 RANGES = {
     "1h":  (3600,    60),
@@ -82,6 +96,47 @@ def series():
         }
         for r in rows
     ])
+
+
+def fireplace_pids() -> list[int]:
+    # reap our own child first, so a stopped fireplace doesn't linger as a zombie
+    if fireplace_proc is not None:
+        fireplace_proc.poll()
+    out = subprocess.run(
+        ["pgrep", "-f", FIREPLACE_PATTERN], capture_output=True, text=True
+    )
+    return [int(pid) for pid in out.stdout.split()]
+
+
+@app.route("/api/fireplace")
+def fireplace_status():
+    return jsonify({"running": bool(fireplace_pids())})
+
+
+@app.route("/api/fireplace", methods=["POST"])
+def fireplace_switch():
+    global fireplace_proc
+    on = bool((request.get_json(silent=True) or {}).get("on"))
+    with fireplace_lock:
+        pids = fireplace_pids()
+        if on and not pids:
+            with open(FIREPLACE_LOG, "a") as log:
+                fireplace_proc = subprocess.Popen(
+                    [FIREPLACE_PYTHON, str(FIREPLACE_SCRIPT)],
+                    cwd=FIREPLACE_SCRIPT.parent,
+                    stdout=log,
+                    stderr=log,
+                )
+        elif not on:
+            # SIGTERM lets fireplace.py clear the LEDs before exiting
+            for pid in pids:
+                os.kill(pid, signal.SIGTERM)
+            if fireplace_proc is not None:
+                try:
+                    fireplace_proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    pass
+        return jsonify({"running": bool(fireplace_pids())})
 
 
 if __name__ == "__main__":
