@@ -11,7 +11,7 @@ import random
 # handle Ctrl-C
 def signal_handler(sig, frame):
     sense.clear()
-    sense.show_message("Cncl", 0.02,(0,60,0))
+    sense.show_message("Exited", 0.05,(0,60,0))
     sys.exit(0)
 
 signal.signal(signal.SIGINT, signal_handler)

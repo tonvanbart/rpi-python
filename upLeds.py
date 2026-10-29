@@ -11,7 +11,7 @@ def get_ip_address():
        s.connect(("8.8.8.8", 80))
        ip_address = s.getsockname()[0]
        s.close()
-   except Exception, e:
+   except (Exception, e):
        ip_address = 'not connected'
    return ip_address
 
