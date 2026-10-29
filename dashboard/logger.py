@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS readings (
     grid_imp_kwh REAL,
     grid_exp_kwh REAL
 );
-CREATE INDEX IF NOT EXISTS idx_ts ON readings(ts);
 """
 
 
