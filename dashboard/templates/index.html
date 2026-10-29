@@ -13,6 +13,15 @@ body {
     color: #1f2937;
 }
 h1 { margin: 0 0 20px 0; font-size: 1.4rem; }
+#stale-warning {
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    color: #92400e;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 0.9rem;
+}
 .tiles {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -121,6 +130,8 @@ h1 { margin: 0 0 20px 0; font-size: 1.4rem; }
 <body>
 <h1>Solar Dashboard</h1>
 
+<div id="stale-warning" hidden></div>
+
 <div class="tiles">
     <div class="tile pv">
         <div class="tile-label">Producing</div>
@@ -163,6 +174,23 @@ h1 { margin: 0 0 20px 0; font-size: 1.4rem; }
 <script>
 let currentRange = '1h';
 let chart;
+let lastTs = null;
+// the logger writes a row every minute; allow a few misses (and some clock skew)
+const STALE_AFTER_S = 5 * 60;
+
+function updateStale() {
+    const warning = document.getElementById('stale-warning');
+    const age = lastTs === null ? null : Date.now() / 1000 - lastTs;
+    if (age === null || age < STALE_AFTER_S) {
+        warning.hidden = true;
+        return;
+    }
+    const minutes = Math.round(age / 60);
+    const ago = minutes < 120 ? `${minutes} minutes` : `${Math.round(minutes / 60)} hours`;
+    warning.textContent = `No new readings for ${ago}. The logger may have stopped; ` +
+        'the tiles and chart show old data.';
+    warning.hidden = false;
+}
 
 async function refreshLatest() {
     try {
@@ -199,6 +227,7 @@ async function refreshLatest() {
             sub.textContent = '';
         }
 
+        lastTs = d.ts;
         const t = new Date(d.ts * 1000);
         document.getElementById('last-update').textContent =
             'Last reading: ' + t.toLocaleString();
@@ -339,6 +368,8 @@ document.getElementById('fireplace-button').addEventListener('click', async (ev)
 
 async function refreshAll() {
     await refreshLatest();
+    // checked even when the fetch failed, so the age keeps growing if the Pi is unreachable
+    updateStale();
     await refreshChart();
     await refreshFireplace();
 }
