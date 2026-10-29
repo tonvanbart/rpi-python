@@ -64,7 +64,7 @@ Single table, one row per minute:
 | `grid_imp_kwh` | REAL | Lifetime grid import (kWh), 0.1 kWh resolution |
 | `grid_exp_kwh` | REAL | Lifetime grid export (kWh), 0.1 kWh resolution |
 
-House consumption is **derived** as `pv_w + grid_w` at query time. Not stored.
+House consumption is **derived** as `pv_w + grid_w` at query time (with `NULL` `pv_w` counted as 0). Not stored.
 
 ## Deployment
 
@@ -143,7 +143,7 @@ Then restart the service if `app.py` changed.
 ## Things to remember (the gotchas)
 
 - **Device IPs are pinned via DHCP reservation in the Deco.** Inverter `HF-LPT230` at `192.168.68.110`, SmartBridge `smartbridge-3e12` at `192.168.68.101`. If reservations are ever removed, scripts will break and the IPs must be re-pinned (or `logger.py` updated).
-- **The inverter is offline at night.** Its wifi dongle is powered by the inverter itself; when PV drops below the startup threshold after sunset, both shut down. `logger.py` handles this gracefully — writes `NULL` for `pv_w` / `pv_total_kwh` and keeps going with the meter. Nighttime gaps in the PV line on the chart are expected, not a bug.
+- **The inverter is offline at night.** Its wifi dongle is powered by the inverter itself; when PV drops below the startup threshold after sunset, both shut down. `logger.py` handles this gracefully — writes `NULL` for `pv_w` / `pv_total_kwh` and keeps going with the meter. `app.py` treats a `NULL` `pv_w` as 0 W, so at night PV shows 0 and consumption equals grid import. (A daytime inverter read failure is also shown as 0 W.)
 - **Lifetime totals tick at 0.1 kWh resolution.** A few minutes of low production won't visibly bump them. Trust instantaneous values for "right now"; use the cumulative columns for daily/weekly totals via diffing.
 - **House consumption is derived, not measured.** It's `pv_w + grid_w`. The inverter has no smart meter wired into it on this install, so its built-in `house_consumption` field is unreliable — don't trust it. The SmartBridge is the source of truth for grid flow.
 - **The Net2Grid library exposes electricity only.** No gas, no per-tariff split. If those become needed, would require either bypassing the library to hit raw HTTP endpoints, or replacing the SmartBridge with a HomeWizard P1 Meter.

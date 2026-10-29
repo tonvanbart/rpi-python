@@ -34,9 +34,10 @@ def latest():
         ).fetchone()
     if row is None:
         return jsonify({"error": "no data yet"}), 404
-    pv = row["pv_w"]
+    # inverter offline (low light) means it produces nothing
+    pv = row["pv_w"] if row["pv_w"] is not None else 0
     grid = row["grid_w"]
-    consumption = (pv + grid) if pv is not None and grid is not None else None
+    consumption = (pv + grid) if grid is not None else None
     return jsonify({
         "ts": row["ts"],
         "pv_w": pv,
@@ -59,7 +60,7 @@ def series():
             f"""
             SELECT
                 (ts / {bucket}) * {bucket} AS bucket,
-                AVG(pv_w)   AS pv_w,
+                AVG(COALESCE(pv_w, 0)) AS pv_w,  -- NULL = inverter offline = 0 W
                 AVG(grid_w) AS grid_w
             FROM readings
             WHERE ts >= ?
